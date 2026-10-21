@@ -93,8 +93,14 @@ export default function LiveChart({
       ctx.fillRect(0, 0, w, h);
     }
 
-    const arr = candles.current;
-    if (!arr || arr.length === 0) return;
+    const rawArr = candles.current;
+    if (!rawArr || rawArr.length === 0) return;
+
+    // Responsive candle count: on phones (<480px), show ~28 candles so each candle has generous width and spacing
+    const isMobile = w < 640;
+    const isSmallMobile = w < 480;
+    const visibleCount = isSmallMobile ? 28 : (isMobile ? 38 : (w < 1024 ? 54 : 80));
+    const arr = rawArr.slice(-visibleCount);
 
     let min = Infinity, max = -Infinity, maxV = 0;
     arr.forEach((c) => {
@@ -107,9 +113,9 @@ export default function LiveChart({
     max += pad;
 
     // Layout — price scale on right, time axis on bottom
-    const priceScaleW = backdrop ? 72 : 68;
+    const priceScaleW = isMobile ? 54 : (backdrop ? 72 : 68);
     const timeAxisH  = backdrop ? 28 : 24;
-    const volH       = backdrop ? 75 : 60;
+    const volH       = isMobile ? 55 : (backdrop ? 75 : 60);
 
     const left   = backdrop ? 0 : 8;
     const right  = w - priceScaleW;
@@ -121,12 +127,14 @@ export default function LiveChart({
     const y = (v) => bottom - ((v - min) / (max - min)) * (bottom - top);
     const cw = (right - left) / arr.length;
 
-    ctx.font = backdrop
-      ? "11px 'JetBrains Mono', 'Courier New', monospace"
-      : "10px 'JetBrains Mono', monospace";
+    ctx.font = isSmallMobile
+      ? "9px 'JetBrains Mono', monospace"
+      : (isMobile
+        ? "10px 'JetBrains Mono', monospace"
+        : (backdrop ? "11px 'JetBrains Mono', 'Courier New', monospace" : "10px 'JetBrains Mono', monospace"));
 
     // ── Horizontal grid + price scale ──────────────────────────────────────
-    const gridLines = backdrop ? 6 : 4;
+    const gridLines = isMobile ? 4 : (backdrop ? 6 : 4);
     for (let i = 0; i <= gridLines; i++) {
       const gy = Math.round(top + ((bottom - top) * i) / gridLines) + 0.5;
       ctx.strokeStyle = backdrop ? "rgba(45,50,59,0.45)" : "rgba(45,50,59,0.7)";
@@ -139,11 +147,11 @@ export default function LiveChart({
       ctx.setLineDash([]);
       ctx.fillStyle = backdrop ? "rgba(125,133,147,0.6)" : "#7d8593";
       const val = max - ((max - min) * i) / gridLines;
-      ctx.fillText(val.toFixed(2), right + 8, gy + 3);
+      ctx.fillText(val.toFixed(isMobile ? 1 : 2), right + (isMobile ? 4 : 8), gy + 3);
     }
 
     // ── Vertical grid + time axis ───────────────────────────────────────────
-    const step = backdrop ? 6 : 8;
+    const step = isSmallMobile ? 5 : (isMobile ? 6 : (backdrop ? 6 : 8));
     for (let i = 0; i < arr.length; i += step) {
       const x = Math.round(left + cw * i + cw / 2) + 0.5;
       ctx.strokeStyle = backdrop ? "rgba(45,50,59,0.3)" : "rgba(45,50,59,0.3)";
@@ -170,7 +178,7 @@ export default function LiveChart({
         ? (backdrop ? "rgba(196,255,97,0.20)" : "rgba(196,255,97,0.35)")
         : (backdrop ? "rgba(239,68,68,0.20)"  : "rgba(239,68,68,0.35)");
       ctx.fillRect(
-        x - Math.max(1, cw * 0.3),
+        x - Math.max(1.5, cw * 0.3),
         volBottom - vh,
         Math.max(2, cw * 0.6),
         vh
@@ -178,7 +186,7 @@ export default function LiveChart({
     });
 
     // ── Candles ──────────────────────────────────────────────────────────────
-    const bw = Math.max(2, cw * 0.55);
+    const bw = Math.max(3, cw * 0.6);
     arr.forEach((c, i) => {
       const x = left + cw * i + cw / 2;
       const up = c.c >= c.o;
@@ -195,7 +203,7 @@ export default function LiveChart({
         x - bw / 2,
         Math.min(yo, yc),
         bw,
-        Math.max(1, Math.abs(yc - yo))
+        Math.max(1.5, Math.abs(yc - yo))
       );
       ctx.globalAlpha = 1;
     });
@@ -212,10 +220,11 @@ export default function LiveChart({
     ctx.stroke();
     ctx.setLineDash([]);
     // Tag box
+    const tagW = isMobile ? 52 : 66;
     ctx.fillStyle = "#C4FF61";
-    ctx.fillRect(right + 2, y(last.c) - 9, 66, 18);
+    ctx.fillRect(right + 1, y(last.c) - 9, tagW, 18);
     ctx.fillStyle = "#0E1116";
-    ctx.fillText(last.c.toFixed(2), right + 7, y(last.c) + 4);
+    ctx.fillText(last.c.toFixed(isMobile ? 1 : 2), right + (isMobile ? 3 : 7), y(last.c) + 4);
     ctx.globalAlpha = 1;
 
     // ── OHLC readout (only in normal inline mode, avoid collision with navbar in backdrop) ──
@@ -229,8 +238,8 @@ export default function LiveChart({
       );
     }
 
-    // ── Backdrop subtle label in right rail ──────────────────────────────────
-    if (backdrop) {
+    // ── Backdrop subtle label in right rail (hidden on small mobile) ──────────
+    if (backdrop && !isMobile) {
       ctx.font = "10px 'JetBrains Mono', monospace";
       ctx.fillStyle = "rgba(196,255,97,0.3)";
       ctx.fillText(`FEED // ${symbol}`, right + 4, h - 10);
